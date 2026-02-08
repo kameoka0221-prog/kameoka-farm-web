@@ -38,23 +38,19 @@
                 heroTitle: "生命の履歴を、味わう。",
                 heroSub: "夜間回復（ゼロクロス）を経て凝縮された、情報の製造業としての果実。",
                 dashboardTitle: "圃場の今",
-                philosophyTitle: "引き算の美学",
                 productsTitle: "果実のラインナップ",
                 buyNow: "今すぐ購入",
                 dataSugar: "糖度",
-                aiGreeting: "亀岡農園のAIコンシェルジュです。今日の体調や気分に合わせて、あなたに最適な果実をご提案します。",
-                configRequired: "設定が必要です。右下のアイコンから設定を行ってください。"
+                aiGreeting: "亀岡農園のAIコンシェルジュです。"
             },
             en: {
                 heroTitle: "Taste the History of Life.",
                 heroSub: "Condensed process of life through nocturnal recovery.",
                 dashboardTitle: "Field Stats",
-                philosophyTitle: "Subtraction",
                 productsTitle: "Collection",
                 buyNow: "Buy Now",
                 dataSugar: "Sugar",
-                aiGreeting: "Hello, I am the AI Concierge.",
-                configRequired: "Setup required. Please configure via the bottom-right icon."
+                aiGreeting: "Hello, I am the AI Concierge."
             }
         };
 
@@ -92,33 +88,32 @@
                 const priceId = stripePriceIds[product.key]?.trim();
 
                 if (!cleanPk || !priceId) {
-                    setGlobalError("設定エラー: キーまたは価格IDが未入力です。");
+                    setGlobalError("ERROR: キーまたは価格IDが未設定です。");
                     setIsAiOpen(true);
                     return;
                 }
 
-                if (typeof Stripe === 'undefined') {
-                    setGlobalError("ライブラリエラー: Stripe SDKが読み込まれていません。");
-                    return;
-                }
-
                 setLoadingId(product.id);
+                console.log("Stripe Redirect Attempt:", { cleanPk, priceId });
                 
                 try {
                     const stripe = Stripe(cleanPk);
                     const { error } = await stripe.redirectToCheckout({
                         lineItems: [{ price: priceId, quantity: 1 }],
                         mode: 'payment',
-                        successUrl: window.location.origin + '?status=success',
-                        cancelUrl: window.location.origin + '?status=cancel',
+                        successUrl: window.location.href.split('?')[0] + '?status=success',
+                        cancelUrl: window.location.href.split('?')[0] + '?status=cancel',
                     });
 
                     if (error) {
-                        setGlobalError("Stripe Error: " + error.message);
+                        console.error("Stripe Redirection Error:", error);
+                        // 画面上にエラーメッセージを詳細に表示
+                        setGlobalError(`STRIPE ERROR: ${error.message}`);
                         setLoadingId(null);
                     }
                 } catch (e) {
-                    setGlobalError("実行エラー: Stripeの初期化に失敗しました。キーが正しいか確認してください。");
+                    console.error("Critical Runtime Error:", e);
+                    setGlobalError(`SYSTEM ERROR: ${e.message}`);
                     setLoadingId(null);
                 }
             };
@@ -133,7 +128,7 @@
                                 <button onClick={() => setLang(lang === 'ja' ? 'en' : 'ja')} className="text-xs tracking-widest hover:opacity-50 uppercase">
                                     {lang === 'ja' ? 'ENGLISH' : '日本語'}
                                 </button>
-                                <i data-lucide="shopping-cart" className="w-5 h-5"></i>
+                                <i data-lucide="shopping-cart" className="w-5 h-5 cursor-pointer"></i>
                             </div>
                         </div>
                     </nav>
@@ -147,11 +142,13 @@
                         </div>
                     </section>
 
-                    {/* Error Banner */}
+                    {/* Error Banner (Visible when it fails) */}
                     {globalError && (
-                        <div className="bg-red-500 text-white py-4 px-6 text-center text-sm font-bold animate-pulse sticky top-20 z-40">
-                            <i data-lucide="alert-circle" className="inline-block w-4 h-4 mr-2 align-middle"></i>
-                            {globalError}
+                        <div className="bg-red-600 text-white py-6 px-6 text-center text-sm font-bold sticky top-20 z-40 shadow-xl border-b border-red-700">
+                            <div className="max-w-4xl mx-auto flex items-center justify-center gap-3">
+                                <i data-lucide="alert-octagon" className="w-6 h-6"></i>
+                                <span>{globalError}</span>
+                            </div>
                         </div>
                     )}
 
@@ -165,7 +162,7 @@
                                         <div className="aspect-square overflow-hidden mb-6 bg-gray-100 relative">
                                             <img src={p.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                         </div>
-                                        <div className="flex justify-between items-end mb-4">
+                                        <div className="flex justify-between items-end mb-4 px-1">
                                             <div>
                                                 <h3 className="text-lg font-light">{p.name}</h3>
                                                 <p className="text-xs text-gray-400 font-bold">¥{p.price.toLocaleString()}</p>
@@ -190,7 +187,6 @@
                         <i data-lucide={(!apiKey || !stripePk) ? "settings" : "message-square"}></i>
                     </button>
 
-                    {/* Modal */}
                     <AnimatePresence>
                         {isAiOpen && (
                             <UnifiedModal 
@@ -206,78 +202,70 @@
         }
 
         function UnifiedModal({ onClose, t, lang, apiKey, setApiKey, stripePk, setStripePk, stripePriceIds, setStripePriceIds }) {
-            const [view, setView] = useState((apiKey && stripePk) ? 'chat' : 'config');
             const [testResult, setTestResult] = useState("");
             
             const handleSave = () => {
                 localStorage.setItem('gemini_api_key', apiKey.trim());
                 localStorage.setItem('stripe_pk', stripePk.trim());
                 localStorage.setItem('stripe_price_ids', JSON.stringify(stripePriceIds));
-                alert("設定を保存しました。画面をリロードして反映します。");
+                alert("Settings Saved. The page will reload.");
                 window.location.reload();
             };
 
             const testStripe = () => {
-                if (!stripePk) { setTestResult("❌ キーが空です"); return; }
-                if (typeof Stripe === 'undefined') { setTestResult("❌ SDK未読込"); return; }
+                if (!stripePk) { setTestResult("❌ Key is empty"); return; }
                 try {
                     const s = Stripe(stripePk.trim());
-                    setTestResult("✅ Stripe初期化成功");
+                    setTestResult("✅ Stripe.js Initialized Successfully");
                 } catch (e) {
-                    setTestResult("❌ 形式エラー: " + e.message);
+                    setTestResult("❌ Error: " + e.message);
                 }
             };
 
             return (
                 <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className="fixed bottom-24 right-8 w-[90vw] md:w-96 h-[550px] bg-white shadow-2xl rounded-2xl z-[60] flex flex-col overflow-hidden border border-gray-100">
                     <div className="bg-[#1A2F23] p-5 text-white flex justify-between items-center">
-                        <div className="flex gap-4 text-[10px] tracking-widest uppercase">
-                            <button onClick={() => setView('config')} className="font-bold underline">Settings</button>
-                        </div>
+                        <span className="text-[10px] tracking-widest uppercase font-bold">System Setup</span>
                         <button onClick={onClose}><i data-lucide="x" className="w-5 h-5"></i></button>
                     </div>
 
                     <div className="flex-1 p-6 overflow-y-auto space-y-4 text-left">
-                        <h3 className="text-xs font-bold uppercase tracking-widest border-b pb-2">Setup & Debug</h3>
-                        
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Stripe Public Key</label>
-                                <input type="text" value={stripePk} onChange={e => setStripePk(e.target.value)} placeholder="pk_test_..." className="w-full p-2 text-xs border rounded bg-gray-50 outline-none" />
-                                <button onClick={testStripe} className="text-[9px] mt-1 text-blue-500 underline uppercase">Test Connection</button>
-                                {testResult && <p className="text-[9px] mt-1 font-bold">{testResult}</p>}
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase text-gray-400 font-bold block">Price IDs</label>
-                                {PRODUCTS.map(p => (
-                                    <div key={p.id} className="flex items-center gap-2">
-                                        <span className="text-[8px] w-12 text-gray-400 font-bold uppercase">{p.key}</span>
-                                        <input 
-                                            type="text" 
-                                            value={stripePriceIds[p.key] || ''} 
-                                            onChange={e => setStripePriceIds({...stripePriceIds, [p.key]: e.target.value})} 
-                                            placeholder={`price_...`} 
-                                            className="flex-1 p-2 text-xs border rounded bg-gray-50 outline-none" 
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="pt-4 border-t">
-                                <label className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Gemini API Key</label>
-                                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AIza..." className="w-full p-2 text-xs border rounded bg-gray-50 outline-none" />
-                            </div>
+                        <div>
+                            <label className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Stripe Public Key</label>
+                            <input type="text" value={stripePk} onChange={e => setStripePk(e.target.value)} placeholder="pk_test_..." className="w-full p-2 text-xs border rounded bg-gray-50 outline-none" />
+                            <button onClick={testStripe} className="text-[9px] mt-1 text-blue-600 underline uppercase">Test Connection</button>
+                            {testResult && <p className="text-[9px] mt-1 font-bold">{testResult}</p>}
                         </div>
 
-                        <button onClick={handleSave} className="w-full py-3 bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg mt-4 shadow-lg hover:bg-orange-600 transition-colors">Apply Changes</button>
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase text-gray-400 font-bold block">Price IDs</label>
+                            {PRODUCTS.map(p => (
+                                <div key={p.id} className="flex items-center gap-2">
+                                    <span className="text-[8px] w-12 text-gray-400 font-bold uppercase">{p.key}</span>
+                                    <input 
+                                        type="text" 
+                                        value={stripePriceIds[p.key] || ''} 
+                                        onChange={e => setStripePriceIds({...stripePriceIds, [p.key]: e.target.value})} 
+                                        placeholder={`price_...`} 
+                                        className="flex-1 p-2 text-xs border rounded bg-gray-50 outline-none" 
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="pt-4 border-t">
+                            <label className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Gemini API Key</label>
+                            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AIza..." className="w-full p-2 text-xs border rounded bg-gray-50 outline-none" />
+                        </div>
+
+                        <button onClick={handleSave} className="w-full py-3 bg-orange-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg mt-4 shadow-lg hover:bg-orange-700 transition-colors">Apply Changes</button>
                         
-                        <div className="mt-8 p-3 bg-gray-50 rounded text-[9px] text-gray-500 leading-relaxed uppercase">
-                            <p className="font-bold mb-1">Checklist:</p>
+                        <div className="mt-8 p-3 bg-red-50 border border-red-100 rounded text-[9px] text-red-600 leading-relaxed uppercase">
+                            <p className="font-bold mb-1">🔴 IMPORTANT CHECKLIST:</p>
                             <ol className="list-decimal ml-3 space-y-1">
-                                <li>Stripe Dashboard > Settings > Checkout > Enable "Client-only integration"</li>
-                                <li>Add your domain to "Allowed domains" in Stripe Dashboard.</li>
-                                <li>Ensure Price IDs match the current environment (Test/Live).</li>
+                                <li>Go to: Stripe Dashboard > Settings > Checkout</li>
+                                <li>Enable <b>"Client-only integration"</b></li>
+                                <li>Add your current URL (e.g. <b>*.vercel.app</b>) to <b>"Allowed domains"</b> in the same section.</li>
                             </ol>
                         </div>
                     </div>
